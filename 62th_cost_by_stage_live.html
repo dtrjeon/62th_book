@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>61기 조편성 개인별 비용</title>
+<style>
+  :root{
+    --bg:#F7F5F0;
+    --card:#FFFFFF;
+    --ink:#26241F;
+    --sub:#75705F;
+    --line:#E4DFD2;
+    --accent:#B8860B;
+    --accent-soft:#F3E7C8;
+    --total:#EFE9D8;
+    --green:#DCE8D6;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    font-family:"Pretendard","Noto Sans KR","Malgun Gothic",sans-serif;
+    background:var(--bg);
+    color:var(--ink);
+    padding:24px 16px 60px;
+  }
+  h1{
+    font-size:1.25rem;
+    font-weight:800;
+    text-align:center;
+    margin:0 0 4px;
+    letter-spacing:-0.01em;
+  }
+  .subtitle{
+    text-align:center;
+    color:var(--sub);
+    font-size:0.82rem;
+    margin-bottom:6px;
+  }
+  .updated{
+    text-align:center;
+    color:var(--sub);
+    font-size:0.72rem;
+    margin-bottom:18px;
+  }
+  .status{
+    max-width:900px;
+    margin:0 auto 16px;
+    text-align:center;
+    font-size:0.85rem;
+    color:var(--sub);
+  }
+  .status.error{ color:#B04A3B; }
+  .tabs{
+    display:flex;
+    gap:6px;
+    max-width:900px;
+    margin:0 auto 16px;
+    overflow-x:auto;
+    padding-bottom:4px;
+    -webkit-overflow-scrolling:touch;
+  }
+  .tab-btn{
+    flex:0 0 auto;
+    padding:9px 16px;
+    border-radius:999px;
+    border:1px solid var(--line);
+    background:var(--card);
+    color:var(--sub);
+    font-size:0.85rem;
+    font-weight:700;
+    cursor:pointer;
+    white-space:nowrap;
+    transition:all .15s ease;
+  }
+  .tab-btn.active{
+    background:var(--accent);
+    border-color:var(--accent);
+    color:#fff;
+  }
+  .panel{
+    display:none;
+    max-width:900px;
+    margin:0 auto;
+    background:var(--card);
+    border:1px solid var(--line);
+    border-radius:14px;
+    padding:16px 14px 20px;
+    box-shadow:0 1px 3px rgba(0,0,0,0.04);
+  }
+  .panel.active{display:block;}
+
+  .summary{
+    display:grid;
+    grid-template-columns:repeat(2,1fr);
+    gap:8px;
+    margin-bottom:16px;
+  }
+  .summary .box{
+    background:var(--accent-soft);
+    border-radius:10px;
+    padding:10px 8px;
+    text-align:center;
+  }
+  .summary .box .label{
+    font-size:0.68rem;
+    color:var(--sub);
+    margin-bottom:2px;
+  }
+  .summary .box .value{
+    font-size:0.95rem;
+    font-weight:800;
+  }
+
+  .note{
+    font-size:0.75rem;
+    color:var(--sub);
+    background:#FAF7EE;
+    border:1px solid var(--line);
+    border-radius:8px;
+    padding:8px 10px;
+    margin-bottom:14px;
+    line-height:1.5;
+  }
+
+  .table-scroll{
+    overflow-x:auto;
+    border-radius:10px;
+    border:1px solid var(--line);
+  }
+  table{
+    border-collapse:collapse;
+    width:100%;
+    min-width:680px;
+    font-size:0.78rem;
+  }
+  thead th{
+    background:var(--green);
+    font-weight:700;
+    padding:8px 6px;
+    text-align:center;
+    border-bottom:1px solid var(--line);
+    border-right:1px solid var(--line);
+    white-space:nowrap;
+  }
+  tbody td{
+    padding:7px 6px;
+    text-align:right;
+    border-bottom:1px solid var(--line);
+    border-right:1px solid var(--line);
+    white-space:nowrap;
+  }
+  tbody td.textcell{
+    text-align:left;
+    font-weight:600;
+  }
+  tbody tr.total-row td{
+    background:var(--total);
+    font-weight:800;
+  }
+  tbody tr:last-child td{border-bottom:none;}
+  tbody tr:hover td{background:#FBF9F3;}
+  tbody tr.total-row:hover td{background:var(--total);}
+  th:last-child, td:last-child{border-right:none;}
+
+  .reload-btn{
+    display:block;
+    margin:20px auto 0;
+    padding:8px 18px;
+    border-radius:999px;
+    border:1px solid var(--line);
+    background:var(--card);
+    color:var(--ink);
+    font-size:0.8rem;
+    font-weight:700;
+    cursor:pointer;
+  }
+</style>
+</head>
+<body>
+
+<h1>61기 조편성 개인별 비용</h1>
+<div class="subtitle">구글시트 실시간 연동</div>
+<div class="updated" id="updatedAt"></div>
+
+<div class="status" id="status">불러오는 중...</div>
+<div class="tabs" id="tabs"></div>
+<div id="panels"></div>
+<button class="reload-btn" id="reloadBtn" style="display:none;">새로고침</button>
+
+<script>
+// ⚠️ 배포 후 Apps Script 웹앱 URL을 여기에 붙여넣으세요.
+// 예: https://script.google.com/macros/s/AKfycb.../exec
+const GAS_URL = "https://script.google.com/macros/s/AKfycbxxouIdf4ibmAWz3Dowpm6sTpfHOkiJeTsfpgKPEp4Flx4R1tLOENHrGeOX_5kHJqeJcA/exec";
+
+const STAGE_ORDER = ["1단계","2단계","3단계","4단계","5단계"];
+const stageEl = {};
+
+function fmt(v){
+  if(v===""||v===undefined||v===null) return "";
+  if(typeof v === "string" && v.trim()==="-") return "-";
+  const n = Number(v);
+  if(isNaN(n)) return v;
+  return n.toLocaleString("ko-KR");
+}
+
+function isMoneyHeader(h){
+  return ["교과서(5판)","교과서","단계별교재","복음제시 전문","기타","금액","부교재1","부교재2","간식비","합계"].includes(h);
+}
+
+function renderTabs(data){
+  const tabsEl = document.getElementById("tabs");
+  const panelsEl = document.getElementById("panels");
+  tabsEl.innerHTML = "";
+  panelsEl.innerHTML = "";
+
+  const available = STAGE_ORDER.filter(s => data[s]);
+
+  available.forEach((stageName, idx)=>{
+    const stage = data[stageName];
+
+    const btn = document.createElement("button");
+    btn.className = "tab-btn" + (idx===0?" active":"");
+    btn.textContent = stageName;
+    btn.onclick = ()=> selectTab(stageName, available);
+    tabsEl.appendChild(btn);
+
+    const panel = document.createElement("div");
+    panel.className = "panel" + (idx===0?" active":"");
+    panel.id = "panel-"+stageName;
+
+    const headers = stage.headers || [];
+    const groupCol = headers[0], nameCol = headers[1];
+    const totalKey = headers[headers.length-1]; // "합계"
+
+    panel.innerHTML = `
+      <div class="summary">
+        <div class="box"><div class="label">인원</div><div class="value">${stage.people || "-"}</div></div>
+        <div class="box"><div class="label">단계 총액</div><div class="value">${fmt(stage.total ? stage.total[totalKey] : "")}원</div></div>
+      </div>
+      ${ (stage.notes && stage.notes.length) ? `<div class="note">${stage.notes.map(n=>`<div>${n}</div>`).join("")}</div>` : "" }
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr>${headers.map(h=>`<th>${h}</th>`).join("")}</tr>
+          </thead>
+          <tbody>
+            <tr class="total-row">
+              ${headers.map((h,i)=>{
+                if(i===0) return `<td>-</td>`;
+                if(i===1) return `<td class="textcell">합계</td>`;
+                return `<td>${fmt(stage.total ? stage.total[h] : "")}</td>`;
+              }).join("")}
+            </tr>
+            ${ (stage.rows||[]).map(row=>`
+              <tr>
+                ${headers.map((h,i)=>{
+                  const v = row[h];
+                  const cls = (i===0||i===1) ? " textcell" : "";
+                  return `<td class="${cls.trim()}">${fmt(v)}</td>`;
+                }).join("")}
+              </tr>
+            `).join("") }
+          </tbody>
+        </table>
+      </div>
+    `;
+    panelsEl.appendChild(panel);
+    stageEl[stageName] = panel;
+  });
+
+  window.__available = available;
+}
+
+function selectTab(name, available){
+  document.querySelectorAll(".tab-btn").forEach((b,i)=>{
+    b.classList.toggle("active", available[i]===name);
+  });
+  document.querySelectorAll(".panel").forEach(p=>{
+    p.classList.toggle("active", p.id === "panel-"+name);
+  });
+}
+
+async function load(){
+  const statusEl = document.getElementById("status");
+  const reloadBtn = document.getElementById("reloadBtn");
+  statusEl.textContent = "불러오는 중...";
+  statusEl.classList.remove("error");
+  reloadBtn.style.display = "none";
+
+  if(!GAS_URL || GAS_URL.indexOf("여기에") !== -1){
+    statusEl.textContent = "⚠️ GAS_URL이 설정되지 않았습니다. Apps Script 배포 후 URL을 코드에 붙여넣어주세요.";
+    statusEl.classList.add("error");
+    return;
+  }
+
+  try{
+    const res = await fetch(GAS_URL, { cache: "no-store" });
+    const data = await res.json();
+    if(data._error){
+      statusEl.textContent = "⚠️ 시트 로딩 오류: " + data._error;
+      statusEl.classList.add("error");
+      return;
+    }
+    statusEl.textContent = "";
+    document.getElementById("updatedAt").textContent = data._updatedAt
+      ? "마지막 업데이트: " + new Date(data._updatedAt).toLocaleString("ko-KR")
+      : "";
+    renderTabs(data);
+    reloadBtn.style.display = "block";
+  }catch(err){
+    statusEl.textContent = "⚠️ 데이터를 불러오지 못했습니다: " + err.message;
+    statusEl.classList.add("error");
+  }
+}
+
+document.getElementById("reloadBtn").addEventListener("click", load);
+load();
+</script>
+
+</body>
+</html>
