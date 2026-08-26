@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>61기 조편성 개인별 비용</title>
+<title>62기 조편성 개인별 비용</title>
 <style>
   :root{
     --bg:#F7F5F0;
@@ -50,7 +50,7 @@
     font-size:0.85rem;
     color:var(--sub);
   }
-  .status.error{ color:#B04A3B; }
+  .status.error{ color:#B04A3B; white-space:pre-wrap; }
   .tabs{
     display:flex;
     gap:6px;
@@ -92,7 +92,7 @@
 
   .summary{
     display:grid;
-    grid-template-columns:repeat(2,1fr);
+    grid-template-columns:repeat(3,1fr);
     gap:8px;
     margin-bottom:16px;
   }
@@ -131,7 +131,7 @@
   table{
     border-collapse:collapse;
     width:100%;
-    min-width:680px;
+    min-width:640px;
     font-size:0.78rem;
   }
   thead th{
@@ -150,9 +150,13 @@
     border-right:1px solid var(--line);
     white-space:nowrap;
   }
-  tbody td.textcell{
+  tbody td.name{
     text-align:left;
     font-weight:600;
+  }
+  tbody td.grp{
+    text-align:center;
+    color:var(--sub);
   }
   tbody tr.total-row td{
     background:var(--total);
@@ -162,6 +166,12 @@
   tbody tr:hover td{background:#FBF9F3;}
   tbody tr.total-row:hover td{background:var(--total);}
   th:last-child, td:last-child{border-right:none;}
+  .empty{
+    text-align:center;
+    color:var(--sub);
+    font-size:0.8rem;
+    padding:20px 0;
+  }
 
   .reload-btn{
     display:block;
@@ -179,8 +189,8 @@
 </head>
 <body>
 
-<h1>61기 조편성 개인별 비용</h1>
-<div class="subtitle">구글시트 실시간 연동</div>
+<h1>62기 조편성 개인별 비용</h1>
+<div class="subtitle">인원 명단 + 단계별 단가 자동 계산 (구글시트 연동)</div>
 <div class="updated" id="updatedAt"></div>
 
 <div class="status" id="status">불러오는 중...</div>
@@ -189,23 +199,16 @@
 <button class="reload-btn" id="reloadBtn" style="display:none;">새로고침</button>
 
 <script>
-// ⚠️ 배포 후 Apps Script 웹앱 URL을 여기에 붙여넣으세요.
-// 예: https://script.google.com/macros/s/AKfycb.../exec
+// ⚠️ 배포한 Apps Script 웹앱 URL을 여기에 붙여넣으세요.
 const GAS_URL = "https://script.google.com/macros/s/AKfycbxxouIdf4ibmAWz3Dowpm6sTpfHOkiJeTsfpgKPEp4Flx4R1tLOENHrGeOX_5kHJqeJcA/exec";
 
 const STAGE_ORDER = ["1단계","2단계","3단계","4단계","5단계"];
-const stageEl = {};
 
 function fmt(v){
   if(v===""||v===undefined||v===null) return "";
-  if(typeof v === "string" && v.trim()==="-") return "-";
   const n = Number(v);
   if(isNaN(n)) return v;
   return n.toLocaleString("ko-KR");
-}
-
-function isMoneyHeader(h){
-  return ["교과서(5판)","교과서","단계별교재","복음제시 전문","기타","금액","부교재1","부교재2","간식비","합계"].includes(h);
 }
 
 function renderTabs(data){
@@ -218,6 +221,8 @@ function renderTabs(data){
 
   available.forEach((stageName, idx)=>{
     const stage = data[stageName];
+    const cols = stage.cols || [];
+    const colLabels = stage.colLabels || {};
 
     const btn = document.createElement("button");
     btn.className = "tab-btn" + (idx===0?" active":"");
@@ -229,44 +234,56 @@ function renderTabs(data){
     panel.className = "panel" + (idx===0?" active":"");
     panel.id = "panel-"+stageName;
 
-    const headers = stage.headers || [];
-    const groupCol = headers[0], nameCol = headers[1];
-    const totalKey = headers[headers.length-1]; // "합계"
+    const regCols = cols.filter(c=>["textbook","stepbook","gospel","etc","amount"].includes(c));
+    const subCols = cols.filter(c=>["sub1","sub2","subamt"].includes(c));
 
-    panel.innerHTML = `
-      <div class="summary">
-        <div class="box"><div class="label">인원</div><div class="value">${stage.people || "-"}</div></div>
-        <div class="box"><div class="label">단계 총액</div><div class="value">${fmt(stage.total ? stage.total[totalKey] : "")}원</div></div>
-      </div>
-      ${ (stage.notes && stage.notes.length) ? `<div class="note">${stage.notes.map(n=>`<div>${n}</div>`).join("")}</div>` : "" }
+    const tableHtml = (stage.rows && stage.rows.length) ? `
       <div class="table-scroll">
         <table>
           <thead>
-            <tr>${headers.map(h=>`<th>${h}</th>`).join("")}</tr>
+            <tr>
+              <th>그룹-조</th><th>성명</th>
+              ${regCols.length ? `<th colspan="${regCols.length}">①등록비</th>` : ""}
+              ${subCols.length ? `<th colspan="${subCols.length}">②부교재비</th>` : ""}
+              <th>③간식비</th><th>합계</th>
+            </tr>
+            <tr>
+              <th>그룹-조</th><th>성명</th>
+              ${regCols.map(c=>`<th>${colLabels[c]||c}</th>`).join("")}
+              ${subCols.map(c=>`<th>${colLabels[c]||c}</th>`).join("")}
+              <th>간식비</th><th>합계</th>
+            </tr>
           </thead>
           <tbody>
             <tr class="total-row">
-              ${headers.map((h,i)=>{
-                if(i===0) return `<td>-</td>`;
-                if(i===1) return `<td class="textcell">합계</td>`;
-                return `<td>${fmt(stage.total ? stage.total[h] : "")}</td>`;
-              }).join("")}
+              <td class="grp">-</td><td class="name">합계</td>
+              ${regCols.map(c=>`<td>${fmt(stage.totalRow[c])}</td>`).join("")}
+              ${subCols.map(c=>`<td>${fmt(stage.totalRow[c])}</td>`).join("")}
+              <td>${fmt(stage.totalRow.snack)}</td><td>${fmt(stage.totalRow.total)}</td>
             </tr>
-            ${ (stage.rows||[]).map(row=>`
+            ${stage.rows.map(r=>`
               <tr>
-                ${headers.map((h,i)=>{
-                  const v = row[h];
-                  const cls = (i===0||i===1) ? " textcell" : "";
-                  return `<td class="${cls.trim()}">${fmt(v)}</td>`;
-                }).join("")}
+                <td class="grp">${r.grp}</td><td class="name">${r.name}</td>
+                ${regCols.map(c=>`<td>${fmt(r[c])}</td>`).join("")}
+                ${subCols.map(c=>`<td>${fmt(r[c])}</td>`).join("")}
+                <td>${fmt(r.snack)}</td><td>${fmt(r.total)}</td>
               </tr>
-            `).join("") }
+            `).join("")}
           </tbody>
         </table>
       </div>
+    ` : `<div class="empty">이 단계에 배정된 인원이 없습니다.</div>`;
+
+    panel.innerHTML = `
+      <div class="summary">
+        <div class="box"><div class="label">인원</div><div class="value">${stage.people || "0명"}</div></div>
+        <div class="box"><div class="label">1인당 합계</div><div class="value">${fmt(stage.unit ? stage.unit.total : "")}원</div></div>
+        <div class="box"><div class="label">단계 총액</div><div class="value">${fmt(stage.totalRow ? stage.totalRow.total : "")}원</div></div>
+      </div>
+      ${ (stage.notes && stage.notes.length) ? `<div class="note">${stage.notes.map(n=>`<div>${n}</div>`).join("")}</div>` : "" }
+      ${tableHtml}
     `;
     panelsEl.appendChild(panel);
-    stageEl[stageName] = panel;
   });
 
   window.__available = available;
