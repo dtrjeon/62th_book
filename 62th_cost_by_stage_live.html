@@ -239,17 +239,32 @@
     z-index:10;
   }
 
-  .reload-btn{
-    display:block;
-    margin:20px auto 0;
+  .btn-row{
+    display:flex;
+    justify-content:center;
+    gap:10px;
+    margin-top:20px;
+  }
+  .reload-btn, .save-btn{
     padding:8px 18px;
     border-radius:999px;
     border:1px solid var(--line);
-    background:var(--card);
-    color:var(--ink);
     font-size:0.8rem;
     font-weight:700;
     cursor:pointer;
+  }
+  .reload-btn{
+    background:var(--card);
+    color:var(--ink);
+  }
+  .save-btn{
+    background:var(--accent);
+    border-color:var(--accent);
+    color:#fff;
+  }
+  .save-btn:disabled{
+    opacity:0.6;
+    cursor:default;
   }
 </style>
 </head>
@@ -263,7 +278,10 @@
 <div class="status" id="status">불러오는 중...</div>
 <div class="tabs" id="tabs"></div>
 <div id="panels"></div>
-<button class="reload-btn" id="reloadBtn" style="display:none;">새로고침</button>
+<div class="btn-row">
+  <button class="reload-btn" id="reloadBtn" style="display:none;">새로고침</button>
+  <button class="save-btn" id="saveBtn" style="display:none;">구글시트에 저장</button>
+</div>
 
 <script>
 // ⚠️ 배포한 Apps Script 웹앱 URL을 여기에 붙여넣으세요.
@@ -491,6 +509,64 @@ document.getElementById("panels").addEventListener("change", (e)=>{
   recomputeAndRender();
 });
 
+// 현재 화면(미구입 반영 후) 상태를 로그 저장용 배열로 만든다.
+function buildSavePayload(){
+  const cloned = JSON.parse(JSON.stringify(RAW_DATA));
+  applyExclusions(cloned);
+  const rows = [];
+  STAGE_ORDER.forEach(stageName=>{
+    const stage = cloned[stageName];
+    if(!stage || !stage.rows) return;
+    const colLabels = stage.colLabels || {};
+    stage.rows.forEach(r=>{
+      const key = r.grp + "|" + r.name;
+      const excludedKeys = EXCLUSIONS[key] || [];
+      const excludedLabels = excludedKeys.map(k=> colLabels[k] || k).join(", ");
+      rows.push({
+        stage: stageName, grp: r.grp, name: r.name,
+        textbook: r.textbook, stepbook: r.stepbook, gospel: r.gospel, etc: r.etc, amount: r.amount,
+        sub1: r.sub1, sub2: r.sub2, subamt: r.subamt, snack: r.snack, total: r.total,
+        excluded: excludedLabels
+      });
+    });
+  });
+  return rows;
+}
+
+async function saveToSheet(){
+  const saveBtn = document.getElementById("saveBtn");
+  const statusEl = document.getElementById("status");
+  if(!RAW_DATA) return;
+
+  const rows = buildSavePayload();
+  saveBtn.disabled = true;
+  const originalLabel = saveBtn.textContent;
+  saveBtn.textContent = "저장 중...";
+
+  try{
+    const res = await fetch(GAS_URL, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify({ action: "save", rows: rows })
+    });
+    const result = await res.json();
+    if(result && result.ok){
+      statusEl.classList.remove("error");
+      statusEl.textContent = "✅ 저장로그 시트에 저장했습니다 (" + result.savedCount + "명)";
+    }else{
+      statusEl.classList.add("error");
+      statusEl.textContent = "⚠️ 저장 실패: " + (result && result.error ? result.error : "알 수 없는 오류");
+    }
+  }catch(err){
+    statusEl.classList.add("error");
+    statusEl.textContent = "⚠️ 저장 요청 실패: " + err.message;
+  }finally{
+    saveBtn.disabled = false;
+    saveBtn.textContent = originalLabel;
+  }
+}
+document.getElementById("saveBtn").addEventListener("click", saveToSheet);
+
 async function load(){
   const statusEl = document.getElementById("status");
   const reloadBtn = document.getElementById("reloadBtn");
@@ -519,6 +595,7 @@ async function load(){
     RAW_DATA = data;
     recomputeAndRender();
     reloadBtn.style.display = "block";
+    document.getElementById("saveBtn").style.display = "block";
   }catch(err){
     statusEl.textContent = "⚠️ 데이터를 불러오지 못했습니다: " + err.message;
     statusEl.classList.add("error");
