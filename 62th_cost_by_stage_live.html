@@ -179,6 +179,53 @@
     padding:20px 0;
   }
 
+  .name-btn{
+    background:none;
+    border:none;
+    padding:0;
+    margin:0;
+    font:inherit;
+    font-weight:600;
+    color:var(--ink);
+    cursor:pointer;
+    display:inline-flex;
+    align-items:center;
+    gap:3px;
+  }
+  .name-btn .caret{
+    font-size:0.65rem;
+    color:var(--sub);
+  }
+  tr.detail-row td{
+    background:#FAF7EE;
+    text-align:left;
+    white-space:normal;
+  }
+  .excl-panel{
+    padding:6px 2px;
+  }
+  .excl-title{
+    font-size:0.75rem;
+    color:var(--sub);
+    font-weight:700;
+    margin-bottom:6px;
+  }
+  .excl-item{
+    display:inline-flex;
+    align-items:center;
+    gap:4px;
+    font-size:0.78rem;
+    font-weight:500;
+    margin:0 12px 6px 0;
+    cursor:pointer;
+    white-space:nowrap;
+  }
+  .excl-item input{
+    width:15px;
+    height:15px;
+    cursor:pointer;
+  }
+
   .reload-btn{
     display:block;
     margin:20px auto 0;
@@ -209,6 +256,65 @@
 const GAS_URL = "https://script.google.com/macros/s/AKfycbxxouIdf4ibmAWz3Dowpm6sTpfHOkiJeTsfpgKPEp4Flx4R1tLOENHrGeOX_5kHJqeJcA/exec";
 
 const STAGE_ORDER = ["1단계","2단계","3단계","4단계","5단계"];
+
+// ── 개인별 "미구입 항목" ──────────────────────────────
+// 표에서 이름을 클릭하면 체크박스가 펼쳐지고, 체크한 항목은 그 사람만
+// 0원으로 빠지면서 합계도 자동으로 다시 계산됩니다.
+// (이 브라우저에 저장되며, 새로고침해도 유지됩니다)
+const EXCL_STORAGE_KEY = "cost62_exclusions_v1";
+const EXCLUDABLE_KEYS = ["textbook","stepbook","gospel","etc","sub1","sub2"];
+
+function loadExclusions(){
+  try{
+    const raw = localStorage.getItem(EXCL_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : {};
+  }catch(e){ return {}; }
+}
+function saveExclusions(excl){
+  try{ localStorage.setItem(EXCL_STORAGE_KEY, JSON.stringify(excl)); }catch(e){}
+}
+
+let EXCLUSIONS = loadExclusions();
+let RAW_DATA = null;
+let CURRENT_STAGE = null;
+
+// EXCLUSIONS를 참고해 각 단계 데이터의 개인별 행 + 합계행을 재계산한다.
+function applyExclusions(data){
+  const AMOUNT_KEYS = ["textbook","stepbook","gospel","etc"];
+  const SUB_KEYS = ["sub1","sub2"];
+  const ALL_NUMERIC_KEYS = [...AMOUNT_KEYS, "amount", ...SUB_KEYS, "subamt", "snack", "total"];
+
+  STAGE_ORDER.forEach(stageName=>{
+    const stage = data[stageName];
+    if(!stage || !stage.rows) return;
+
+    let changed = false;
+    stage.rows.forEach(row=>{
+      const key = row.grp + "|" + row.name;
+      const excludeKeys = EXCLUSIONS[key];
+      if(!excludeKeys || !excludeKeys.length) return;
+
+      excludeKeys.forEach(k=>{
+        if(row[k] === "" || row[k] === undefined || row[k] === null) return; // 이 단계에 없는 항목
+        row[k] = "";
+        changed = true;
+      });
+
+      const amount = AMOUNT_KEYS.reduce((s,k)=> s + (Number(row[k])||0), 0);
+      const subamt = SUB_KEYS.reduce((s,k)=> s + (Number(row[k])||0), 0);
+      row.amount = amount;
+      if(row.subamt !== undefined) row.subamt = subamt;
+      row.total = amount + subamt + (Number(row.snack)||0);
+    });
+
+    if(changed && stage.totalRow){
+      ALL_NUMERIC_KEYS.forEach(k=>{
+        if(stage.totalRow[k] === "" || stage.totalRow[k] === undefined) return;
+        stage.totalRow[k] = stage.rows.reduce((s,r)=> s + (Number(r[k])||0), 0);
+      });
+    }
+  });
+}
 
 function fmt(v){
   if(v===""||v===undefined||v===null) return "";
@@ -242,6 +348,8 @@ function renderTabs(data){
 
     const regCols = cols.filter(c=>["textbook","stepbook","gospel","etc","amount"].includes(c));
     const subCols = cols.filter(c=>["sub1","sub2","subamt"].includes(c));
+    const excludableCols = [...regCols, ...subCols].filter(c=>EXCLUDABLE_KEYS.includes(c));
+    const colCount = 2 + regCols.length + subCols.length + 2; // 그룹-조,성명 + ... + 간식비,합계
 
     const tableHtml = (stage.rows && stage.rows.length) ? `
       <div class="table-scroll">
@@ -267,14 +375,38 @@ function renderTabs(data){
               ${subCols.map(c=>`<td>${fmt(stage.totalRow[c])}</td>`).join("")}
               <td>${fmt(stage.totalRow.snack)}</td><td>${fmt(stage.totalRow.total)}</td>
             </tr>
-            ${stage.rows.map(r=>`
+            ${stage.rows.map((r,ri)=>{
+              const key = r.grp + "|" + r.name;
+              const excluded = EXCLUSIONS[key] || [];
+              const detailId = "detail-"+stageName+"-"+ri;
+              const detailRow = excludableCols.length ? `
+                <tr class="detail-row" id="${detailId}" style="display:none">
+                  <td colspan="${colCount}">
+                    <div class="excl-panel">
+                      <div class="excl-title">${r.name}님이 구입하지 않는 항목</div>
+                      ${excludableCols.map(c=>`
+                        <label class="excl-item">
+                          <input type="checkbox" class="excl-check" data-key="${key}" data-col="${c}" ${excluded.includes(c)?"checked":""}>
+                          ${colLabels[c]||c}
+                        </label>
+                      `).join("")}
+                    </div>
+                  </td>
+                </tr>
+              ` : "";
+              return `
               <tr>
-                <td class="grp">${r.grp}</td><td class="name">${r.name}</td>
+                <td class="grp">${r.grp}</td>
+                <td class="name">
+                  <button type="button" class="name-btn" data-target="${detailId}">${r.name} <span class="caret">▾</span></button>
+                </td>
                 ${regCols.map(c=>`<td>${fmt(r[c])}</td>`).join("")}
                 ${subCols.map(c=>`<td>${fmt(r[c])}</td>`).join("")}
                 <td>${fmt(r.snack)}</td><td>${fmt(r.total)}</td>
               </tr>
-            `).join("")}
+              ${detailRow}
+            `;
+            }).join("")}
           </tbody>
         </table>
       </div>
@@ -296,6 +428,7 @@ function renderTabs(data){
 }
 
 function selectTab(name, available){
+  CURRENT_STAGE = name;
   document.querySelectorAll(".tab-btn").forEach((b,i)=>{
     b.classList.toggle("active", available[i]===name);
   });
@@ -303,6 +436,46 @@ function selectTab(name, available){
     p.classList.toggle("active", p.id === "panel-"+name);
   });
 }
+
+// RAW_DATA + EXCLUSIONS를 기준으로 다시 계산해서 화면을 새로 그린다.
+function recomputeAndRender(){
+  if(!RAW_DATA) return;
+  const cloned = JSON.parse(JSON.stringify(RAW_DATA));
+  applyExclusions(cloned);
+  renderTabs(cloned);
+  const available = window.__available || [];
+  if(CURRENT_STAGE && available.includes(CURRENT_STAGE)){
+    selectTab(CURRENT_STAGE, available);
+  }
+}
+
+// 이름 클릭(체크박스 펼치기) / 체크박스 토글 이벤트 위임
+document.getElementById("panels").addEventListener("click", (e)=>{
+  const nameBtn = e.target.closest(".name-btn");
+  if(nameBtn){
+    const target = document.getElementById(nameBtn.dataset.target);
+    if(target){
+      target.style.display = target.style.display === "table-row" ? "none" : "table-row";
+    }
+    return;
+  }
+});
+document.getElementById("panels").addEventListener("change", (e)=>{
+  const cb = e.target.closest(".excl-check");
+  if(!cb) return;
+  const key = cb.dataset.key;
+  const col = cb.dataset.col;
+  const list = EXCLUSIONS[key] ? EXCLUSIONS[key].slice() : [];
+  const idx = list.indexOf(col);
+  if(cb.checked){
+    if(idx === -1) list.push(col);
+  }else{
+    if(idx !== -1) list.splice(idx,1);
+  }
+  if(list.length) EXCLUSIONS[key] = list; else delete EXCLUSIONS[key];
+  saveExclusions(EXCLUSIONS);
+  recomputeAndRender();
+});
 
 async function load(){
   const statusEl = document.getElementById("status");
@@ -329,7 +502,8 @@ async function load(){
     document.getElementById("updatedAt").textContent = data._updatedAt
       ? "마지막 업데이트: " + new Date(data._updatedAt).toLocaleString("ko-KR")
       : "";
-    renderTabs(data);
+    RAW_DATA = data;
+    recomputeAndRender();
     reloadBtn.style.display = "block";
   }catch(err){
     statusEl.textContent = "⚠️ 데이터를 불러오지 못했습니다: " + err.message;
