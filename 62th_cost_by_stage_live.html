@@ -226,6 +226,19 @@
     cursor:pointer;
   }
 
+  .version-badge{
+    position:fixed;
+    top:8px;
+    right:10px;
+    font-size:0.68rem;
+    color:var(--sub);
+    background:var(--card);
+    border:1px solid var(--line);
+    border-radius:999px;
+    padding:2px 8px;
+    z-index:10;
+  }
+
   .reload-btn{
     display:block;
     margin:20px auto 0;
@@ -242,6 +255,7 @@
 </head>
 <body>
 
+<div class="version-badge">v1.1</div>
 <h1>62기 조편성 개인별 비용</h1>
 <div class="subtitle">인원 명단 + 단계별 단가 자동 계산 (구글시트 연동)</div>
 <div class="updated" id="updatedAt"></div>
