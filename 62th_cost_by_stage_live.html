@@ -21,6 +21,8 @@
     --accent-soft:#F3E7C8;
     --total:#EFE9D8;
     --green:#DCE8D6;
+    --zebra:#F1F4F8;
+    font-size:17px;
   }
   *{box-sizing:border-box;}
   body{
@@ -29,6 +31,38 @@
     background:var(--bg);
     color:var(--ink);
     padding:24px 16px 60px;
+  }
+  .font-ctrl{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap:8px;
+    max-width:900px;
+    margin:0 auto 14px;
+  }
+  .font-ctrl span.lbl{
+    font-size:0.78rem;
+    color:var(--sub);
+  }
+  .font-ctrl button{
+    width:30px;
+    height:30px;
+    border-radius:8px;
+    border:1px solid var(--line);
+    background:var(--card);
+    color:var(--ink);
+    font-weight:800;
+    font-size:0.85rem;
+    cursor:pointer;
+    line-height:1;
+  }
+  .font-ctrl button:active{background:var(--accent-soft);}
+  .font-ctrl .level{
+    font-size:0.78rem;
+    font-weight:700;
+    color:var(--ink);
+    min-width:38px;
+    text-align:center;
   }
   h1{
     font-size:1.25rem;
@@ -138,7 +172,7 @@
     border-collapse:collapse;
     width:100%;
     min-width:640px;
-    font-size:0.78rem;
+    font-size:0.85rem;
   }
   thead th{
     background:var(--green);
@@ -168,8 +202,10 @@
     background:var(--total);
     font-weight:800;
   }
+  tbody tr.row-alt td{background:var(--zebra);}
   tbody tr:last-child td{border-bottom:none;}
   tbody tr:hover td{background:#FBF9F3;}
+  tbody tr.row-alt:hover td{background:#E6EBF2;}
   tbody tr.total-row:hover td{background:var(--total);}
   th:last-child, td:last-child{border-right:none;}
   .empty{
@@ -275,6 +311,13 @@
 <div class="subtitle">인원 명단 + 단계별 단가 자동 계산 (구글시트 연동)</div>
 <div class="updated" id="updatedAt"></div>
 
+<div class="font-ctrl">
+  <span class="lbl">글자 크기</span>
+  <button type="button" id="fontMinus">가－</button>
+  <span class="level" id="fontLevel">100%</span>
+  <button type="button" id="fontPlus">가＋</button>
+</div>
+
 <div class="status" id="status">불러오는 중...</div>
 <div class="tabs" id="tabs"></div>
 <div id="panels"></div>
@@ -309,6 +352,33 @@ function saveExclusions(excl){
 let EXCLUSIONS = loadExclusions();
 let RAW_DATA = null;
 let CURRENT_STAGE = null;
+
+// ── 글자 크기 조절 ──────────────────────────────
+const FONT_BASE_PX = 17;
+const FONT_STORAGE_KEY = "cost62_fontscale_v1";
+const FONT_LEVELS = [90, 100, 110, 120, 130, 145, 160]; // %
+function loadFontLevelIdx(){
+  try{
+    const raw = localStorage.getItem(FONT_STORAGE_KEY);
+    const idx = raw !== null ? Number(raw) : 1; // 기본 100%
+    return (idx >= 0 && idx < FONT_LEVELS.length) ? idx : 1;
+  }catch(e){ return 1; }
+}
+let fontLevelIdx = loadFontLevelIdx();
+function applyFontLevel(){
+  const pct = FONT_LEVELS[fontLevelIdx];
+  document.documentElement.style.fontSize = (FONT_BASE_PX * pct / 100) + "px";
+  const lvlEl = document.getElementById("fontLevel");
+  if(lvlEl) lvlEl.textContent = pct + "%";
+  try{ localStorage.setItem(FONT_STORAGE_KEY, String(fontLevelIdx)); }catch(e){}
+}
+document.getElementById("fontMinus").addEventListener("click", ()=>{
+  if(fontLevelIdx > 0){ fontLevelIdx--; applyFontLevel(); }
+});
+document.getElementById("fontPlus").addEventListener("click", ()=>{
+  if(fontLevelIdx < FONT_LEVELS.length - 1){ fontLevelIdx++; applyFontLevel(); }
+});
+applyFontLevel();
 
 // EXCLUSIONS를 참고해 각 단계 데이터의 개인별 행 + 합계행을 재계산한다.
 function applyExclusions(data){
@@ -427,7 +497,7 @@ function renderTabs(data){
                 </tr>
               ` : "";
               return `
-              <tr>
+              <tr class="${ri % 2 === 1 ? "row-alt" : ""}">
                 <td class="grp">${r.grp}</td>
                 <td class="name">
                   <button type="button" class="name-btn" data-target="${detailId}">${r.name} <span class="caret">▾</span></button>
