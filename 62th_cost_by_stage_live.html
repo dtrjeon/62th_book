@@ -208,6 +208,9 @@
   tbody tr.row-alt:hover td{background:#E6EBF2;}
   tbody tr.total-row:hover td{background:var(--total);}
   th:last-child, td:last-child{border-right:none;}
+  thead th.grp-b, tbody td.grp-b{
+    border-left:2px solid var(--accent);
+  }
   .empty{
     text-align:center;
     color:var(--sub);
@@ -459,23 +462,23 @@ function renderTabs(data){
           <thead>
             <tr>
               <th>그룹-조</th><th>성명</th>
-              ${regCols.length ? `<th colspan="${regCols.length}">①등록비</th>` : ""}
-              ${subCols.length ? `<th colspan="${subCols.length}">②부교재비</th>` : ""}
-              <th>③간식비</th><th>합계</th>
+              ${regCols.length ? `<th colspan="${regCols.length}" class="grp-b">①등록비</th>` : ""}
+              ${subCols.length ? `<th colspan="${subCols.length}" class="grp-b">②부교재비</th>` : ""}
+              <th class="grp-b">③간식비</th><th class="grp-b">합계</th>
             </tr>
             <tr>
               <th>그룹-조</th><th>성명</th>
-              ${regCols.map(c=>`<th>${colLabels[c]||c}</th>`).join("")}
-              ${subCols.map(c=>`<th>${colLabels[c]||c}</th>`).join("")}
-              <th>간식비</th><th>합계</th>
+              ${regCols.map((c,i)=>`<th${i===0?' class="grp-b"':""}>${colLabels[c]||c}</th>`).join("")}
+              ${subCols.map((c,i)=>`<th${i===0?' class="grp-b"':""}>${colLabels[c]||c}</th>`).join("")}
+              <th class="grp-b">간식비</th><th class="grp-b">합계</th>
             </tr>
           </thead>
           <tbody>
             <tr class="total-row">
               <td class="grp">-</td><td class="name">합계</td>
-              ${regCols.map(c=>`<td>${fmt(stage.totalRow[c])}</td>`).join("")}
-              ${subCols.map(c=>`<td>${fmt(stage.totalRow[c])}</td>`).join("")}
-              <td>${fmt(stage.totalRow.snack)}</td><td>${fmt(stage.totalRow.total)}</td>
+              ${regCols.map((c,i)=>`<td${i===0?' class="grp-b"':""}>${fmt(stage.totalRow[c])}</td>`).join("")}
+              ${subCols.map((c,i)=>`<td${i===0?' class="grp-b"':""}>${fmt(stage.totalRow[c])}</td>`).join("")}
+              <td class="grp-b">${fmt(stage.totalRow.snack)}</td><td class="grp-b">${fmt(stage.totalRow.total)}</td>
             </tr>
             ${stage.rows.map((r,ri)=>{
               const key = r.grp + "|" + r.name;
@@ -502,9 +505,9 @@ function renderTabs(data){
                 <td class="name">
                   <button type="button" class="name-btn" data-target="${detailId}">${r.name} <span class="caret">▾</span></button>
                 </td>
-                ${regCols.map(c=>`<td>${fmt(r[c])}</td>`).join("")}
-                ${subCols.map(c=>`<td>${fmt(r[c])}</td>`).join("")}
-                <td>${fmt(r.snack)}</td><td>${fmt(r.total)}</td>
+                ${regCols.map((c,i)=>`<td${i===0?' class="grp-b"':""}>${fmt(r[c])}</td>`).join("")}
+                ${subCols.map((c,i)=>`<td${i===0?' class="grp-b"':""}>${fmt(r[c])}</td>`).join("")}
+                <td class="grp-b">${fmt(r.snack)}</td><td class="grp-b">${fmt(r.total)}</td>
               </tr>
               ${detailRow}
             `;
